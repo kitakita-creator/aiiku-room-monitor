@@ -32,8 +32,30 @@ def read_room(page, evt):
     page.goto(url(evt), wait_until='domcontentloaded', timeout=60000)
     if parse_qs(urlparse(page.url).query).get('evt_no') != [evt]:
         raise ValueError('room URL mismatch')
-    popup = page.locator('a.vacancy_popup')
-    popup.wait_for(state='visible', timeout=30000)
+        popup = page.locator('a.vacancy_popup')
+
+    try:
+        popup.wait_for(state='visible', timeout=30000)
+    except Exception:
+        print("=== PAGE DIAGNOSTICS START ===", flush=True)
+        print("URL:", page.url, flush=True)
+        print("TITLE:", page.title(), flush=True)
+        print("POPUP LINK COUNT:", popup.count(), flush=True)
+        print(
+            "CALENDAR COUNT:",
+            page.locator('#hotel_calendar_content').count(),
+            flush=True,
+        )
+
+        try:
+            body_text = page.locator('body').inner_text(timeout=5000)
+            print("PAGE TEXT:", body_text[:2000], flush=True)
+        except Exception:
+            print("PAGE TEXT: could not read", flush=True)
+
+        print("=== PAGE DIAGNOSTICS END ===", flush=True)
+        raise
+
     popup.click()
     page.locator('#hotel_calendar_content').wait_for(state='visible', timeout=30000)
     page.wait_for_timeout(2500)
