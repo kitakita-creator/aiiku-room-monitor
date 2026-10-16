@@ -1,0 +1,49 @@
+name: Aiiku availability notification
+on:
+  schedule:
+    - cron: '36 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Read only: no LINE delivery, no baseline update'
+        type: boolean
+        default: true
+      test_notification:
+        description: 'Send explicit LINE test message (dry_run must be false)'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: aiiku-monitor
+  cancel-in-progress: false
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Check rooms and notify
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+          TEST_NOTIFICATION: ${{ inputs.test_notification || false }}
+        run: python monitor.py
+      - name: Save baseline and latest log
+        if: always()
+        run: |
+          if [ ! -d state ]; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add state/
+          if ! git diff --cached --quiet; then
+            git commit -m 'Update availability and latest log'
+            git push
+          fi
